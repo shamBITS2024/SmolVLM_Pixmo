@@ -73,6 +73,9 @@ training_args = TrainingArguments(
 
 # Dataset
 data = load_dataset("allenai/pixmo-points", split="train")
+image_sha = {img.split('_')[1].split(".")[0] for img in os.listdir(images_dir)}
+
+filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
 
 # Collate Function
 def collate_fn(examples, image_dir):
@@ -146,8 +149,8 @@ def fine_tune(images_dir, model, trainer, batch_number, save_dir):
     return batch_save_dir
 
 # Run Fine-Tuning
-for batch_number in range(1, 21):  # Assuming 20 batches
-    batch_dir = os.path.join(images_dir, f"batch_{batch_number}")
+for batch_number in range(1,2):  # Assuming 20 batches
+    batch_dir = os.path.join(images_dir)
     print(batch_dir)
     if not os.path.exists(batch_dir):
         print(f"Batch {batch_number} directory not found. Skipping...")

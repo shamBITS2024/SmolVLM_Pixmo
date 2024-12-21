@@ -81,10 +81,15 @@ def collate_fn(examples, image_dir):
     for example in examples:
         try:
             image_sha = example["image_sha256"]
-            image_path = os.path.join(image_dir, f"{image_sha}.jpg")  # Adjust extension
-            if not os.path.exists(image_path):
-                logger.error(f"Missing Image: {image_path}")
-                continue
+
+            image_files = sorted(os.listdir(image_dir))
+            image_hashes = {img.split('_')[1].split('.')[0]:img for img in image_files}
+
+            if image_sha in image_hashes.keys:
+                image_path = os.path.join(image_dir,f"{image}")  # Adjust extension
+                if not os.path.exists(image_path):
+                    logger.error(f"Missing Image: {image_path}")
+                    continue
 
             image = Image.open(image_path).convert("RGB")
 

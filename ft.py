@@ -73,6 +73,9 @@ training_args = TrainingArguments(
 
 # Dataset
 data = load_dataset("allenai/pixmo-points", split="train")
+image_sha = {img.split('_')[1].split(".")[0] for img in os.listdir(images_dir)}
+
+filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
 
 # Collate Function
 def collate_fn(examples, image_dir):
@@ -81,16 +84,32 @@ def collate_fn(examples, image_dir):
     for example in examples:
         try:
             image_sha = example["image_sha256"]
-            image_path = os.path.join(image_dir, f"{image_sha}.jpg")  # Adjust extension
-            if not os.path.exists(image_path):
-                logger.error(f"Missing Image: {image_path}")
-                continue
+
+            image_files = sorted(os.listdir(image_dir))
+            image_hashes = {img.split('_')[1].split('.')[0]:img for img in image_files}
+
+            if image_sha in image_hashes.keys:
+                image_path = os.path.join(image_dir,f"{image}")  # Adjust extension
+                if not os.path.exists(image_path):
+                    logger.error(f"Missing Image: {image_path}")
+                    continue
 
             image = Image.open(image_path).convert("RGB")
-            user_prompt = f"Point to the {example['label']} in the image."
+
+            system_prompt="""I will ask you to point on a thing or things in a given image, and you have to generate the output in the form of coordinates as percentages. Follow the below guidelines strictly -
+
+1) According to the prompt, there can be a single or multiple objects in the image, and you have to return me the pixel coordinates as percentages of image dimensions accordingly.
+
+For example,
+- single object prompts can be like: "point to the black bottle of beer on the bottom shelf" or "point to the wall with visible fixtures" and the output should be somewhat like: <point x=\"79.9\" y=\"69.0\" alt=\"black bottle of beer on the bottom shelf\">black bottle of beer on the bottom shelf</point> or <point x=\"33.9\" y=\"58.6\" alt=\"wall with visible fixtures\">wall with visible fixtures</point>.
+
+- Multiple objects prompts can be like: "point to the reflection of plants in the glass" or "point to the streetlights illuminating the road" and the output should be somewhat like: <points x1=\"38.0\" y1=\"10.0\" x2=\"46.5\" y2=\"10.0\" x3=\"52.9\" y3=\"10.0\" x4=\"65.0\" y4=\"10.0\" x5=\"71.0\" y5=\"10.0\" x6=\"92.0\" y6=\"10.0\" alt=\"reflection of plants in the glass\">reflection of plants in the glass</points> or " <points x1=\"38.0\" y1=\"14.0\" x2=\"53.5\" y2=\"10.1\" x3=\"54.2\" y3=\"19.6\" x4=\"60.0\" y4=\"17.5\" x5=\"60.0\" y5=\"24.0\" x6=\"64.0\" y6=\"23.6\" x7=\"64.9\" y7=\"25.6\" x8=\"65.9\" y8=\"26.7\" x9=\"66.5\" y9=\"27.7\" x10=\"67.0\" y10=\"28.6\" x11=\"67.5\" y11=\"29.3\" x12=\"68.0\" y12=\"30.0\""
+2) Make sure the number of instances of objects match with the number of coordinates in your output
+3) Generate only the xml and nothing else"""
+            user_prompt = f"Point to {example['label']}"
             answer = example["points"]
             messages = [
-                {"role": "system", "content": "System prompt text here."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
                 {"role": "assistant", "content": answer},
             ]
@@ -130,8 +149,8 @@ def fine_tune(images_dir, model, trainer, batch_number, save_dir):
     return batch_save_dir
 
 # Run Fine-Tuning
-for batch_number in range(1, 21):  # Assuming 20 batches
-    batch_dir = os.path.join(images_dir, f"batch_{batch_number}")
+for batch_number in range(1,2):  # Assuming 20 batches
+    batch_dir = os.path.join(images_dir)
     print(batch_dir)
     if not os.path.exists(batch_dir):
         print(f"Batch {batch_number} directory not found. Skipping...")

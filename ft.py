@@ -74,12 +74,17 @@ training_args = TrainingArguments(
 # Dataset
 data = load_dataset("allenai/pixmo-points", split="train")
 image_sha = {img.split('_')[1].split(".")[0] for img in os.listdir(images_dir)}
+<<<<<<< HEAD
 print(image_sha)
 print(f"total batch 1 images : {len(image_sha)}")
 
 filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
 print(f"The size of filtered_dataset is {len(filtered_data)}")
 print("\n")
+=======
+
+filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
+>>>>>>> 0ed32437736f76a9e31fa5316df48d1eb37d4f18
 
 # Collate Function
 def collate_fn(examples, image_dir):

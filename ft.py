@@ -1,16 +1,14 @@
 import os
 import torch
-from hashlib import sha256
 from PIL import Image
-from io import BytesIO
-from datasets import load_dataset
+from datasets import load_dataset,Dataset
 from transformers import (
     AutoProcessor,
     Idefics3ForConditionalGeneration,
     TrainingArguments,
     Trainer,
 )
-from peft import prepare_model_for_kbit_training
+
 
 # Logger Setup
 import logging
@@ -54,8 +52,8 @@ for param in model.model.vision_model.parameters():
 # Training Arguments
 training_args = TrainingArguments(
     num_train_epochs=1,
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=4,
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=2,
     warmup_steps=50,
     learning_rate=1e-4,
     weight_decay=0.01,
@@ -69,43 +67,74 @@ training_args = TrainingArguments(
     resume_from_checkpoint=True,
     gradient_checkpointing=True,
     bf16=True,
+    remove_unused_columns= False
 )
 
 # Dataset
 data = load_dataset("allenai/pixmo-points", split="train")
-image_sha = {img.split('_')[1].split(".")[0] for img in os.listdir(images_dir)}
-<<<<<<< HEAD
-print(image_sha)
+data=data.rename_column("label","annotation")
+image_sha = {img.split(".")[0] for img in os.listdir(images_dir)}
+
+
 print(f"total batch 1 images : {len(image_sha)}")
 
 filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
 print(f"The size of filtered_dataset is {len(filtered_data)}")
-print("\n")
-=======
+# print("\n")
+# print(data)
+print(filtered_data.column_names)
+required_columns = ["annotation", "image_sha256", "points"]
+filtered_data = filtered_data.select_columns(required_columns)
 
-filtered_data = data.filter(lambda x: x['image_sha256'] in image_sha)
->>>>>>> 0ed32437736f76a9e31fa5316df48d1eb37d4f18
+def convert_to_xml(points,label):
+  n=len(points)
+  if n==0:
+    xml_string="Not present"
+    return xml_string
+  elif n==1:
+    p="point"
+  else:
+    p="points"
+  xml_string=f"<{p}"
+  for point in points:
+    x=point["x"]
+    y=point["y"]
+    xml_string+=f' x="{x}" y="{y}"'
+  xml_string+=f' alt="{label}">{label}</{p}>'  
+  return xml_string
+    
 
 # Collate Function
-def collate_fn(examples, image_dir):
+def collate_fn(examples):
     texts = []
     images = []
+    image_files = sorted(os.listdir(images_dir))
+    image_hashes = {img.split('.')[0]: img for img in image_files}
+    # print(examples)
+    
     for example in examples:
-        try:
-            image_sha = example["image_sha256"]
+        # print(example)
+        # try:
+        if example['points']==None:
+            continue
+        image_sha = example['image_sha256']
+        image_path = image_hashes.get(image_sha, None)
+        # print(image_path)
 
-            image_files = sorted(os.listdir(image_dir))
-            image_hashes = {img.split('_')[1].split('.')[0]:img for img in image_files}
+        if not image_path:
+            logger.error(f"Image SHA not found: {image_sha}")
+            continue
 
-            if image_sha in image_hashes.keys:
-                image_path = os.path.join(image_dir,f"{image}")  # Adjust extension
-                if not os.path.exists(image_path):
-                    logger.error(f"Missing Image: {image_path}")
-                    continue
+        image_path = os.path.join(images_dir, image_path)
+        logger.info(image_path)
+        if not os.path.exists(image_path):
+            logger.error(f"Missing Image: {image_path}")
+            continue
 
-            image = Image.open(image_path).convert("RGB")
+        image = Image.open(image_path).convert("RGB")
+        
 
-            system_prompt="""I will ask you to point on a thing or things in a given image, and you have to generate the output in the form of coordinates as percentages. Follow the below guidelines strictly -
+        system_prompt="""I will ask you to point on a thing or things in a given image, and you have to generate the output in the form of coordinates as percentages. Follow the below guidelines strictly -
 
 1) According to the prompt, there can be a single or multiple objects in the image, and you have to return me the pixel coordinates as percentages of image dimensions accordingly.
 
@@ -115,20 +144,33 @@ For example,
 - Multiple objects prompts can be like: "point to the reflection of plants in the glass" or "point to the streetlights illuminating the road" and the output should be somewhat like: <points x1=\"38.0\" y1=\"10.0\" x2=\"46.5\" y2=\"10.0\" x3=\"52.9\" y3=\"10.0\" x4=\"65.0\" y4=\"10.0\" x5=\"71.0\" y5=\"10.0\" x6=\"92.0\" y6=\"10.0\" alt=\"reflection of plants in the glass\">reflection of plants in the glass</points> or " <points x1=\"38.0\" y1=\"14.0\" x2=\"53.5\" y2=\"10.1\" x3=\"54.2\" y3=\"19.6\" x4=\"60.0\" y4=\"17.5\" x5=\"60.0\" y5=\"24.0\" x6=\"64.0\" y6=\"23.6\" x7=\"64.9\" y7=\"25.6\" x8=\"65.9\" y8=\"26.7\" x9=\"66.5\" y9=\"27.7\" x10=\"67.0\" y10=\"28.6\" x11=\"67.5\" y11=\"29.3\" x12=\"68.0\" y12=\"30.0\""
 2) Make sure the number of instances of objects match with the number of coordinates in your output
 3) Generate only the xml and nothing else"""
-            user_prompt = f"Point to {example['label']}"
-            answer = example["points"]
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": answer},
-            ]
-            text = processor.apply_chat_template(messages, add_generation_prompt=False)
-            texts.append(text.strip())
-            images.append(image)
+        
+        user_prompt = f"Point to {example['annotation']}"
+        answer = example["points"]
+        answer=convert_to_xml(answer)
+        if not answer:
+            answer="No points found"
+        else:
+            answer=str(answer)
+        messages = [
+            {"role": "user", 
+             "content": [
+                 {"type":"text", "text": system_prompt},
+                 {"type": "image"},
+                 {"type": "text", "text": user_prompt}
+             ]    
+            },
+            {"role": "assistant", "content": answer}
+        ]
+        text = processor.apply_chat_template(messages, add_generation_prompt=False)
+        texts.append(text.strip())
+        images.append(image)
+        # print(images)
+        
 
-        except Exception as e:
-            logger.error(f"Error processing example: {e}")
-            continue
+        # except Exception as e:
+        #     logger.error(f"Error processing example: {e}")
+            
 
     batch = processor(text=texts, images=images, return_tensors="pt", padding=True)
     labels = batch["input_ids"].clone()
@@ -140,12 +182,13 @@ For example,
 trainer = Trainer(
     model=model,
     args=training_args,
-    data_collator=lambda examples: collate_fn(examples, images_dir),
+    data_collator=collate_fn,
     train_dataset=filtered_data,
 )
 
 # Fine-Tuning Workflow
 def fine_tune(images_dir, model, trainer, batch_number, save_dir):
+    print(f" The dataset to be trained is {filtered_data}")
     print(f"Starting fine-tuning for batch {batch_number}...")
     batch_save_dir = os.path.join(save_dir, f"batch_{batch_number}")
     os.makedirs(batch_save_dir, exist_ok=True)
@@ -159,10 +202,10 @@ def fine_tune(images_dir, model, trainer, batch_number, save_dir):
 
 # Run Fine-Tuning
 for batch_number in range(1,2):  # Assuming 20 batches
-    batch_dir = os.path.join(images_dir)
-    print(batch_dir)
-    if not os.path.exists(batch_dir):
+    # batch_dir = os.path.join(images_dir)
+    print(images_dir)
+    if not os.path.exists(images_dir):
         print(f"Batch {batch_number} directory not found. Skipping...")
         continue
 
-    current_model_id = fine_tune(batch_dir, model, trainer, batch_number, model_save_dir)
+    current_model_id = fine_tune(images_dir, model, trainer, batch_number, model_save_dir)

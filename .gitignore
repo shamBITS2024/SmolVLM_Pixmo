@@ -1,2 +1,5 @@
 venv/
 .ipynb_checkpoints
+logs
+invalid_images.log
+SMOLVLM_Pixmo

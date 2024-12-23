@@ -51,9 +51,9 @@ for param in model.model.vision_model.parameters():
 
 # Training Arguments
 training_args = TrainingArguments(
-    num_train_epochs=1,
+    num_train_epochs=3,
     per_device_train_batch_size=2,
-    gradient_accumulation_steps=2,
+    gradient_accumulation_steps=8,
     warmup_steps=50,
     learning_rate=1e-4,
     weight_decay=0.01,
@@ -144,10 +144,10 @@ For example,
 - Multiple objects prompts can be like: "point to the reflection of plants in the glass" or "point to the streetlights illuminating the road" and the output should be somewhat like: <points x1=\"38.0\" y1=\"10.0\" x2=\"46.5\" y2=\"10.0\" x3=\"52.9\" y3=\"10.0\" x4=\"65.0\" y4=\"10.0\" x5=\"71.0\" y5=\"10.0\" x6=\"92.0\" y6=\"10.0\" alt=\"reflection of plants in the glass\">reflection of plants in the glass</points> or " <points x1=\"38.0\" y1=\"14.0\" x2=\"53.5\" y2=\"10.1\" x3=\"54.2\" y3=\"19.6\" x4=\"60.0\" y4=\"17.5\" x5=\"60.0\" y5=\"24.0\" x6=\"64.0\" y6=\"23.6\" x7=\"64.9\" y7=\"25.6\" x8=\"65.9\" y8=\"26.7\" x9=\"66.5\" y9=\"27.7\" x10=\"67.0\" y10=\"28.6\" x11=\"67.5\" y11=\"29.3\" x12=\"68.0\" y12=\"30.0\""
 2) Make sure the number of instances of objects match with the number of coordinates in your output
 3) Generate only the xml and nothing else"""
-        
-        user_prompt = f"Point to {example['annotation']}"
+        annot=example['annotation']
+        user_prompt = f"Point to {annot}"
         answer = example["points"]
-        answer=convert_to_xml(answer)
+        answer=convert_to_xml(answer,annot)
         if not answer:
             answer="No points found"
         else:

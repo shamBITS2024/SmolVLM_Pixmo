@@ -1,0 +1,74 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "pixmo-points",
+  "dataset_size": 671331020,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/allenai/pixmo-points@2b5c6931e790e00ae00d4a2857e5f95d88f09a66/data/train-00000-of-00002.parquet": {
+      "num_bytes": 129576317,
+      "checksum": null
+    },
+    "hf://datasets/allenai/pixmo-points@2b5c6931e790e00ae00d4a2857e5f95d88f09a66/data/train-00001-of-00002.parquet": {
+      "num_bytes": 68760454,
+      "checksum": null
+    }
+  },
+  "download_size": 198336771,
+  "features": {
+    "image_url": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "image_sha256": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "points": [
+      {
+        "x": {
+          "dtype": "float64",
+          "_type": "Value"
+        },
+        "y": {
+          "dtype": "float64",
+          "_type": "Value"
+        }
+      }
+    ],
+    "count": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "annotation": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "collection_method": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 869667791,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 671331020,
+      "num_examples": 2376222,
+      "shard_lengths": [
+        1660111,
+        716111
+      ],
+      "dataset_name": "pixmo-points"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

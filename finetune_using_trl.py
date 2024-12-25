@@ -1,11 +1,14 @@
  # Change requierements.txt
 from transformers import Idefics3ForConditionalGeneration, AutoProcessor
 from datasets import load_dataset
-import torch
+
 import peft
 from trl import SFTConfig, SFTTrainer
 from PIL import Image
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import torch
+torch.cuda.empty_cache()
 
 #add trl , accelerate and bits and bytes
 
@@ -105,6 +108,11 @@ else:
 print(f"the size of trainable image is{len(data)}")
 
 train_dataset= [format_data(sample) for sample in data]
+train_dataset=train_dataset[2800:]
+
+print(f"the size of trainable image is{len(train_dataset)}")
+
+
 # print(train_dataset[0])
 
 
@@ -235,14 +243,16 @@ training_args = SFTConfig(
     output_dir="smolvlm-instruct-trl-sft-PixMoPoints",
     # output_dir="smolvlm-instruct-trl-sft-ChartQA",
     num_train_epochs=1,
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=2,
     gradient_accumulation_steps=4,
+    # torch_empty_cache_steps=16,
+    # torch_compile=True
     warmup_steps=50,
     learning_rate=1e-4,
     weight_decay=0.01,
     logging_steps=25,
     save_strategy="steps",
-    save_steps=25,
+    save_steps=64,
     save_total_limit=1,
     optim="adamw_torch_fused",
     bf16=True,
@@ -252,6 +262,7 @@ training_args = SFTConfig(
     gradient_checkpointing=True,
     dataset_text_field="",
     dataset_kwargs={"skip_prepare_dataset": True},
+    
 )
 
 image_token_id = processor.tokenizer.additional_special_tokens_ids[
@@ -290,7 +301,7 @@ trainer = SFTTrainer(
     peft_config=peft_config,
     tokenizer=processor.tokenizer,
 )
-trainer.train()
+trainer.train(resume_from_checkpoint=True)
 
 trainer.save_model(training_args.output_dir)
 
@@ -298,17 +309,3 @@ trainer.save_model(training_args.output_dir)
 
 # clear_memory()
 
-# model = Idefics3ForConditionalGeneration.from_pretrained(
-#     model_id,
-#     device_map="auto",
-#     torch_dtype=torch.bfloat16,
-#     _attn_implementation="flash_attention_2",
-# )
-
-# processor = AutoProcessor.from_pretrained(model_id)
-
-# adapter_path = "shambits/smolvlm-instruct-trl-sft-PixMoPoints"
-# model.load_adapter(adapter_path)
-# test_dataset[20][:2]
-# test_dataset[20][1]['content'][0]['image']
-# output = generate_text_from_sample(model, processor, test_dataset[20])

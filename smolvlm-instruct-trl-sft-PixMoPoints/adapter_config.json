@@ -26,13 +26,13 @@
   "rank_pattern": {},
   "revision": null,
   "target_modules": [
+    "v_proj",
+    "k_proj",
     "down_proj",
     "o_proj",
-    "up_proj",
     "gate_proj",
-    "k_proj",
-    "v_proj",
-    "q_proj"
+    "q_proj",
+    "up_proj"
   ],
   "task_type": null,
   "use_dora": true,

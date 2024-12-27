@@ -110,5 +110,50 @@ print("\n")
 # Image.imshow(train_dataset[20][1]['content'][0]['image'],"the image")
 output = generate_text_from_sample(model, processor, train_dataset[5000])
 print(f"the answer is {output}")
+#====================================================================================
+# from datasets import load_dataset, Dataset
+# import os
+
+# # Define paths
+# filtered_data_path = "filtered_dataset"
+# batch_path = "batch_1"
+
+# Load dataset with streaming
+
+
+#     # Load dataset in streaming mode
+# data = load_dataset("allenai/pixmo-points", split="train", streaming=True)
+
+#     # Preload valid hashes for faster lookup
+# images = set(os.listdir(batch_path))  # O(n) complexity
+# image_sha = {i.split(".")[0] for i in images}  # Hash lookup table (O(1) lookup)
+
+# # Streaming filter with optimized lookup
+# def fast_filter(dataset):
+#     for sample in dataset:
+#         if sample['image_sha256'] in image_sha:
+#             sample['annotation'] = sample.get('label')
+#             # Fast O(1) lookup
+#             yield sample
+
+# # Apply filter as a stream
+# data = fast_filter(data)
+
+# # Save filtered dataset to disk (optional)
+# # data = data.rename_column("label", "annotation")
+# # data.save_to_disk(filtered_data_path)   
+
+# # Streaming-compatible processing
+# def format_data_stream(dataset, skip_rows=3000):
+#     counter = 0
+#     for sample in dataset:
+#         if counter >= skip_rows:
+#             yield format_data(sample)  # Process each sample on-the-fly
+#         counter += 1
+
+# # Process streamed data
+# data = format_data_stream(data, skip_rows=3000)
+# train_dataset= [format_data(sample) for sample in data]
+
 
 

@@ -1,5 +1,5 @@
  # Change requierements.txt
-from transformers import Idefics3ForConditionalGeneration, AutoProcessor
+from transformers import Idefics3ForConditionalGeneration, AutoProcessor,TrainerCallback
 from datasets import load_dataset
 
 import peft
@@ -8,8 +8,46 @@ from PIL import Image
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch
-torch.cuda.empty_cache()
 
+import gc
+import time
+def clear_memory():
+    # Delete variables if they exist in the current global scope
+    if 'inputs' in globals(): del globals()['inputs']
+    if 'model' in globals(): del globals()['model']
+    if 'processor' in globals(): del globals()['processor']
+    if 'trainer' in globals(): del globals()['trainer']
+    if 'peft_model' in globals(): del globals()['peft_model']
+    if 'bnb_config' in globals(): del globals()['bnb_config']
+    time.sleep(2)
+
+    # Garbage collection and clearing CUDA memory
+    gc.collect()
+    time.sleep(2)
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    time.sleep(2)
+    gc.collect()
+    time.sleep(2)
+
+    print(f"GPU allocated memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+    print(f"GPU reserved memory: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
+
+clear_memory()
+
+
+class StepMemoryManagementCallback(TrainerCallback):
+    def __init__(self, clear_every_n_steps=25):
+        self.clear_every_n_steps = clear_every_n_steps
+        
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step % self.clear_every_n_steps == 0:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            gc.collect()
+            print(f"\nStep {state.global_step} Memory Stats:")
+            print(f"GPU allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+            print(f"GPU reserved: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
 #add trl , accelerate and bits and bytes
 
 
@@ -89,9 +127,9 @@ def format_data(sample):
         },
     ]
 
-from datasets import load_dataset,load_from_disk
 
 
+from datasets import load_from_disk
 
 
 filtered_data_path = "filtered_dataset"
@@ -105,30 +143,15 @@ else:
     data = data.filter(lambda x: x['image_sha256'] in image_sha)
     data.save_to_disk(filtered_data_path)
     
-print(f"the size of trainable image is{len(data)}")
+print(f"the size of trainable image is {len(data)}")
+
 
 train_dataset= [format_data(sample) for sample in data]
-train_dataset=train_dataset[2800:]
+train_dataset=train_dataset[13000:]
 
 print(f"the size of trainable image is{len(train_dataset)}")
 
-
-# print(train_dataset[0])
-
-
-
 model_id="HuggingFaceTB/SmolVLM-Instruct"
-
-# model = Idefics3ForConditionalGeneration.from_pretrained(
-#     model_id,
-#     device_map="auto",
-#     torch_dtype=torch.bfloat16,
-#     _attn_implementation="flash_attention_2",
-# )
-
-# processor = AutoProcessor.from_pretrained(model_id)
-# train_dataset[1]
-# train_dataset[1][1:2]
 
 def generate_text_from_sample(model, processor, sample, max_new_tokens=1024, device="cuda"):
     # Prepare the text input by applying the chat template
@@ -171,32 +194,8 @@ def generate_text_from_sample(model, processor, sample, max_new_tokens=1024, dev
 # output = generate_text_from_sample(model, processor, train_dataset[1])
 
 
-import gc
-import time
 
-def clear_memory():
-    # Delete variables if they exist in the current global scope
-    if 'inputs' in globals(): del globals()['inputs']
-    if 'model' in globals(): del globals()['model']
-    if 'processor' in globals(): del globals()['processor']
-    if 'trainer' in globals(): del globals()['trainer']
-    if 'peft_model' in globals(): del globals()['peft_model']
-    if 'bnb_config' in globals(): del globals()['bnb_config']
-    time.sleep(2)
 
-    # Garbage collection and clearing CUDA memory
-    gc.collect()
-    time.sleep(2)
-    torch.cuda.empty_cache()
-    torch.cuda.synchronize()
-    time.sleep(2)
-    gc.collect()
-    time.sleep(2)
-
-    print(f"GPU allocated memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
-    print(f"GPU reserved memory: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
-
-# clear_memory()
 
 from transformers import BitsAndBytesConfig
 
@@ -243,16 +242,14 @@ training_args = SFTConfig(
     output_dir="smolvlm-instruct-trl-sft-PixMoPoints",
     # output_dir="smolvlm-instruct-trl-sft-ChartQA",
     num_train_epochs=1,
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=4,
-    # torch_empty_cache_steps=16,
-    # torch_compile=True
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=64,
     warmup_steps=50,
-    learning_rate=1e-4,
+    learning_rate=1e-3,
     weight_decay=0.01,
-    logging_steps=25,
+    logging_steps=5,
     save_strategy="steps",
-    save_steps=64,
+    save_steps=10,
     save_total_limit=1,
     optim="adamw_torch_fused",
     bf16=True,
@@ -274,6 +271,7 @@ def collate_fn(examples):
 
     image_inputs = []
     for example in examples:
+      print(example[1]['content'][1]['text'])
       image = example[1]['content'][0]['image']
       
       if image.mode != 'RGB':
@@ -300,6 +298,7 @@ trainer = SFTTrainer(
     data_collator=collate_fn,
     peft_config=peft_config,
     tokenizer=processor.tokenizer,
+    callbacks=[StepMemoryManagementCallback(clear_every_n_steps=25)]
 )
 trainer.train(resume_from_checkpoint=True)
 

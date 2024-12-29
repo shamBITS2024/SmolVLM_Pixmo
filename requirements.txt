@@ -4,3 +4,7 @@ tensorboard
 peft
 pillow
 trl
+wheel
+flash-attn
+timm
+einops
